@@ -75,6 +75,12 @@ class Queue : public Module {
   CheckConstraintResult CheckModuleConstraints() const override;
 
  private:
+
+  // ADDED BY CHERIAN -- START
+  FILE *test_file = NULL;
+  uint64_t init_time_micro;
+  // ADDED BY CHERIAN -- END
+
   const double kHighWaterRatio = 0.90;
   const double kLowWaterRatio = 0.15;
 

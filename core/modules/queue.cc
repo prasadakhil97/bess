@@ -34,6 +34,16 @@
 
 #include "../utils/format.h"
 
+// ADDED BY CHERIANN
+#include "../utils/ip.h"
+#include "../utils/ether.h"
+#include "../utils/tcp.h"
+// DONE
+
+
+#include "../utils/time.h"
+#include "stdio.h"
+
 #define DEFAULT_QUEUE_SIZE 1024
 
 const Commands Queue::cmds = {
@@ -125,6 +135,11 @@ CommandResponse Queue::Init(const bess::pb::QueueArg &arg) {
   }
 
   init_arg_ = arg;
+
+  // ADDED BY CHERIAN -- START
+  test_file = fopen("/users/prasad67/test-file.log", "wb");
+  init_time_micro = tsc_to_ns(rdtsc());
+  // ADDED BY CHERIAN -- END
   return CommandSuccess();
 }
 
@@ -155,6 +170,13 @@ CommandResponse Queue::SetRuntimeConfig(const bess::pb::QueueArg &arg) {
 void Queue::DeInit() {
   bess::Packet *pkt;
 
+  // ADDED BY CHERIAN -- START
+  if (test_file) {
+    fclose(test_file);
+    test_file = NULL;
+  }
+  // ADDED BY CHERIAN -- END
+
   if (queue_) {
     while (llring_sc_dequeue(queue_, (void **)&pkt) == 0) {
       bess::Packet::Free(pkt);
@@ -184,6 +206,19 @@ void Queue::ProcessBatch(Context *, bess::PacketBatch *batch) {
     stats_.dropped += to_drop;
     bess::Packet::Free(batch->pkts() + queued, to_drop);
   }
+
+
+  // CHERIAN
+  uint64_t now_ns = tsc_to_ns(rdtsc());
+  uint64_t time_diff = (now_ns - init_time_micro) / 1000000;
+  if (time_diff > 50) {
+      //fwrite(&time_diff, sizeof(time_diff), 1, test_file);
+      uint64_t queue_occ = stats_.enqueued - stats_.dequeued;
+      fprintf(test_file, "%lu %llu %u\n", now_ns, static_cast<unsigned long long>(queue_occ), llring_count(queue_));
+      //fprintf(test_file, "%llu %llu\n", static_cast<unsigned long long>(now_ns), static_cast<unsigned long long>(queue_occ));
+      init_time_micro = now_ns;
+  } 
+  // DONE
 }
 
 /* to downstream */
