@@ -34,6 +34,8 @@
 #include "../kmod/llring.h"
 #include "../module.h"
 #include "../pb/module_msg.pb.h"
+#include <string>
+#include <fstream>
 
 class Queue : public Module {
  public:

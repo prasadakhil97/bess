@@ -31,6 +31,7 @@
 #include "queue.h"
 
 #include <cstdlib>
+#include <string>
 
 #include "../utils/format.h"
 
@@ -43,6 +44,8 @@
 
 #include "../utils/time.h"
 #include "stdio.h"
+
+#include <fstream>
 
 #define DEFAULT_QUEUE_SIZE 1024
 
@@ -137,7 +140,18 @@ CommandResponse Queue::Init(const bess::pb::QueueArg &arg) {
   init_arg_ = arg;
 
   // ADDED BY CHERIAN -- START
-  test_file = fopen("/users/prasad67/test-file.log", "wb");
+  std::ifstream infile("/users/prasad67/filename.cmd");
+  std::string line;
+  if (std::getline(infile, line)) {
+    std::string filename = line;
+    test_file = fopen(filename.c_str(), "wb");
+  } else {
+    test_file = fopen("/users/prasad67/test-file.log", "wb");
+  }
+  // std::string filename = "/users/prasad67/test-file-" + std::to_string(init_time_micro) + ".log";
+  
+  // test_file = fopen(filename.c_str(), "wb");
+  // //test_file = fopen("/users/prasad67/test-file.log", "wb");
   init_time_micro = tsc_to_ns(rdtsc());
   // ADDED BY CHERIAN -- END
   return CommandSuccess();
@@ -214,7 +228,7 @@ void Queue::ProcessBatch(Context *, bess::PacketBatch *batch) {
   if (time_diff > 50) {
       //fwrite(&time_diff, sizeof(time_diff), 1, test_file);
       uint64_t queue_occ = stats_.enqueued - stats_.dequeued;
-      fprintf(test_file, "%lu %llu %u\n", now_ns, static_cast<unsigned long long>(queue_occ), llring_count(queue_));
+      fprintf(test_file, "%lu %llu \n", now_ns, static_cast<unsigned long long>(queue_occ));//, llring_count(queue_));
       //fprintf(test_file, "%llu %llu\n", static_cast<unsigned long long>(now_ns), static_cast<unsigned long long>(queue_occ));
       init_time_micro = now_ns;
   } 

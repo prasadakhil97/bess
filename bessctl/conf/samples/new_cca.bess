@@ -1,0 +1,79 @@
+import json
+import os
+
+with open('/users/prasad67/bess_config', 'r') as f:
+    bess_conf = eval(f.read().strip())
+
+left_clients = bess_conf['left_clients'] # a list of tuples of (ip, mac) pairs
+right_clients = bess_conf['right_clients']
+speed_mbps = bess_conf['bw_mbps']
+q_size_packets = bess_conf['q_size_packets']
+
+left_nic_pci = bess_conf['left_nic_pci']
+right_nic_pci = bess_conf['right_nic_pci']
+left_nic_mac = bess_conf['left_nic_mac']
+right_nic_mac = bess_conf['right_nic_mac']
+
+left_nic::PMDPort(pci=left_nic_pci)
+right_nic::PMDPort(pci=right_nic_pci)
+
+left_in::PortInc(port=left_nic)
+left_out::PortOut(port=left_nic)
+right_in::PortInc(port=right_nic)
+right_out::PortOut(port=right_nic)
+
+cmd_file = '/users/prasad67/filename.cmd'
+with open(cmd_file, 'w') as file:
+      file.write('/users/prasad67/test_file_left.log')
+      file.close()
+
+btl_queue_left::Queue(size=q_size_packets, backpressure=False)
+btl_queue_left.set_burst(burst=1)
+bess.add_tc('bit_limit',
+      policy='rate_limit',
+      resource='bit',
+      limit={'bit': speed_mbps*1024*1024})
+btl_queue_left.attach_task(parent='bit_limit')
+
+with open(cmd_file, 'w') as file:
+      file.write('/users/prasad67/test_file_right.log')
+      file.close()
+
+btl_queue_right::Queue(size=q_size_packets, backpressure=False)
+btl_queue_right.set_burst(burst=1)
+bess.add_tc('bit_limit2',
+      policy='rate_limit',
+      resource='packet',
+      limit={'packet': 2},
+      max_burst={'packet': 1}) 
+#speed_mbps*1024*1024})
+btl_queue_right.attach_task(parent='bit_limit2')
+
+em_left::ExactMatch(fields=[{'offset':0, 'num_bytes':6}])
+em_left.add(fields=[{'value_bin':bytes(bytearray.fromhex(left_nic_mac))}], gate=0)
+em_right::ExactMatch(fields=[{'offset':0, 'num_bytes':6}])
+em_right.add(fields=[{'value_bin':bytes(bytearray.fromhex(right_nic_mac))}], gate=0)
+
+merger_left::Merge()
+merger_right::Merge()
+
+ip_match::IPLookup()
+# ip_match2::IPLookup()
+for i, ip_mac_pair in enumerate(left_clients):
+      ip_match.add(prefix=ip_mac_pair[0], prefix_len=32, gate=i)
+      ip_match:i -> Update(fields=[{'offset': 0, 'size': 6, 'value': int(ip_mac_pair[1], 16)},
+                                    {'offset': 6, 'size': 6, 'value': int(left_nic_mac, 16)}]) -> merger_left
+
+for i, ip_mac_pair in enumerate(right_clients):
+      ip_match.add(prefix=ip_mac_pair[0], prefix_len=32, gate=i + len(left_clients))
+      ip_match:(i + len(left_clients)) -> Update(fields=[{'offset': 0, 'size': 6, 'value': int(ip_mac_pair[1], 16)},
+                                    {'offset': 6, 'size': 6, 'value': int(right_nic_mac, 16)}]) -> merger_right
+
+left_in -> em_left
+em_left:0 ->ip_match
+
+right_in -> em_right
+em_right:0 -> ip_match # packets from the right can only go left
+
+merger_left -> btl_queue_left -> left_out
+merger_right -> btl_queue_right -> right_out
