@@ -88,8 +88,12 @@ merger_right -> btl_queue_right -> right_out
 
 bess.resume_all()
 
+open("/home/prasad67/bandwidth.log", "w").close()
+
 bw_config = bess_conf['bw_config']
 for bw_mbps, duration in bw_config:
+	with open("/home/prasad67/bandwidth.log", "a") as file:
+	    file.write(str(time.time()) + " " + str(int(bw_mbps*1024*1024)))
 	#print("setting stuff " + str(bw_mbps) + " " + str(duration))
 	bess.update_tc_params('bit_limit', resource='bit', limit={'bit':int(bw_mbps*1024*1024)})	
 	bess.update_tc_params('bit_limit2', resource='bit', limit={'bit':int(bw_mbps*1024*1024)})	
