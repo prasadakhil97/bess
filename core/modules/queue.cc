@@ -140,13 +140,13 @@ CommandResponse Queue::Init(const bess::pb::QueueArg &arg) {
   init_arg_ = arg;
 
   // ADDED BY CHERIAN -- START
-  std::ifstream infile("/users/prasad67/filename.cmd");
+  std::ifstream infile("/home/prasad67/vca_cca/filename.cmd");
   std::string line;
   if (std::getline(infile, line)) {
     std::string filename = line;
     test_file = fopen(filename.c_str(), "wb");
   } else {
-    test_file = fopen("/users/prasad67/test-file.log", "wb");
+    test_file = fopen("/home/prasad67/vca_cca/test-file.log", "wb");
   }
   // std::string filename = "/users/prasad67/test-file-" + std::to_string(init_time_micro) + ".log";
   
@@ -214,9 +214,10 @@ void Queue::ProcessBatch(Context *, bess::PacketBatch *batch) {
   }
 
   stats_.enqueued += queued;
+  uint64_t to_drop = 0;
 
   if (queued < batch->cnt()) {
-    int to_drop = batch->cnt() - queued;
+    to_drop = batch->cnt() - queued;
     stats_.dropped += to_drop;
     bess::Packet::Free(batch->pkts() + queued, to_drop);
   }
@@ -225,10 +226,10 @@ void Queue::ProcessBatch(Context *, bess::PacketBatch *batch) {
   // CHERIAN
   uint64_t now_ns = tsc_to_ns(rdtsc());
   uint64_t time_diff = (now_ns - init_time_micro) / 1000000;
-  if (time_diff > 50) {
+  if (time_diff > 5) {
       //fwrite(&time_diff, sizeof(time_diff), 1, test_file);
       uint64_t queue_occ = stats_.enqueued - stats_.dequeued;
-      fprintf(test_file, "%lu %llu \n", now_ns, static_cast<unsigned long long>(queue_occ));//, llring_count(queue_));
+      fprintf(test_file, "%lu %llu %llu \n", now_ns, static_cast<unsigned long long>(queue_occ), static_cast<unsigned long long>(to_drop));
       //fprintf(test_file, "%llu %llu\n", static_cast<unsigned long long>(now_ns), static_cast<unsigned long long>(queue_occ));
       init_time_micro = now_ns;
   } 
