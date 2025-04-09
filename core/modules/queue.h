@@ -81,6 +81,7 @@ class Queue : public Module {
   // ADDED BY CHERIAN -- START
   FILE *test_file = NULL;
   uint64_t init_time_micro;
+  uint64_t pkts_dropped;
   // ADDED BY CHERIAN -- END
 
   const double kHighWaterRatio = 0.90;

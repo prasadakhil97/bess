@@ -214,11 +214,11 @@ void Queue::ProcessBatch(Context *, bess::PacketBatch *batch) {
   }
 
   stats_.enqueued += queued;
-  uint64_t to_drop = 0;
 
   if (queued < batch->cnt()) {
-    to_drop = batch->cnt() - queued;
+    int to_drop = batch->cnt() - queued;
     stats_.dropped += to_drop;
+    pkts_dropped += to_drop;
     bess::Packet::Free(batch->pkts() + queued, to_drop);
   }
 
@@ -229,9 +229,10 @@ void Queue::ProcessBatch(Context *, bess::PacketBatch *batch) {
   if (time_diff > 5) {
       //fwrite(&time_diff, sizeof(time_diff), 1, test_file);
       uint64_t queue_occ = stats_.enqueued - stats_.dequeued;
-      fprintf(test_file, "%lu %llu %llu \n", now_ns, static_cast<unsigned long long>(queue_occ), static_cast<unsigned long long>(to_drop));
+      fprintf(test_file, "%lu %llu %llu \n", now_ns, static_cast<unsigned long long>(queue_occ), static_cast<unsigned long long>(pkts_dropped));
       //fprintf(test_file, "%llu %llu\n", static_cast<unsigned long long>(now_ns), static_cast<unsigned long long>(queue_occ));
       init_time_micro = now_ns;
+      pkts_dropped = 0;
   } 
   // DONE
 }
