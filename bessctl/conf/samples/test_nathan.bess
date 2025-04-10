@@ -1,0 +1,6 @@
+myport::PMDPort(pci='0000:05:00.1')
+input0::QueueInc(port=myport, qid=0) #This module will read from myport on queue 0
+#input1::QueueInc(port=myport, qid=1) #This module will read from myport on queue 1
+sink = Sink()
+
+input0 -> sink
