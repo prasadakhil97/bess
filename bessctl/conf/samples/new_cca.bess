@@ -68,13 +68,13 @@ for i, ip_mac_pair in enumerate(right_clients):
         ip_match.add(prefix=ip_mac_pair[0][j][0], prefix_len=ip_mac_pair[0][j][1], gate=i)
 
       ip_match:i -> Update(fields=[{'offset': 0, 'size': 6, 'value': int(ip_mac_pair[1], 16)},
-                                    {'offset': 6, 'size': 6, 'value': int(left_nic_mac, 16)}]) -> merger_right
+                                    {'offset': 6, 'size': 6, 'value': int(right_nic_mac, 16)}]) -> merger_right
 
 for i, ip_mac_pair in enumerate(left_clients):
       ip_match.add(prefix=ip_mac_pair[0][0], prefix_len=32, gate=i + len(right_clients))
       #ip_match.add(prefix=ip_mac_pair[0][1], prefix_len=32, gate=i + len(right_clients))
       ip_match:(i + len(right_clients)) -> Update(fields=[{'offset': 0, 'size': 6, 'value': int(ip_mac_pair[1], 16)},
-                                    {'offset': 6, 'size': 6, 'value': int(right_nic_mac, 16)}]) -> merger_left
+                                    {'offset': 6, 'size': 6, 'value': int(left_nic_mac, 16)}]) -> merger_left
 
 left_in -> em_left
 em_left:0 ->ip_match
