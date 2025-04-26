@@ -37,6 +37,7 @@ left_log = bess_conf['left_queue_name']
 right_log = bess_conf['right_queue_name']
 
 latency = bess_conf['rtt']
+drop_rate = bess_conf['drop_rate']
 
 cmd_file = '/home/prasad67/vca_cca/filename.cmd'
 with open(cmd_file, 'w') as file:
@@ -99,7 +100,8 @@ left_in -> em_left
 em_left:0 ->ip_match
 
 right_in -> em_right
-em_right:0 -> ip_match # packets from the right can only go left
+em_right:0 -> rs::RandomSplit(drop_rate=drop_rate, gates=[0])
+rs:0 -> ip_match # packets from the right can only go left
 
 merger_left -> btl_queue_left -> ip_match2
 merger_right -> btl_queue_right -> right_out
