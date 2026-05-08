@@ -1,0 +1,191 @@
+import ast
+import time
+
+CONF_FILE = '/users/prasad67/bess_config'
+CMD_FILE  = '/users/prasad67/filename.cmd'
+BW_LOG    = '/users/prasad67/bandwidth.log'
+
+with open(CONF_FILE, 'r') as f:
+    bess_conf = ast.literal_eval(f.read().strip())
+
+left_clients    = bess_conf['left_clients']
+right_clients   = bess_conf['right_clients']
+speed_mbps      = bess_conf['bw_mbps']
+q_size_packets  = bess_conf['q_size_packets']
+
+left_nic_pci  = bess_conf['left_nic_pci']
+right_nic_pci = bess_conf['right_nic_pci']
+left_nic_mac  = bess_conf['left_nic_mac']
+right_nic_mac = bess_conf['right_nic_mac']
+
+latency   = bess_conf.get('rtt', 0)
+bw_config = bess_conf['bw_config']
+
+left_vca_log  = bess_conf.get('left_vca_queue_name',  '/users/prasad67/left-vca.log')
+left_bg_log   = bess_conf.get('left_bg_queue_name',   '/users/prasad67/left-bg.log')
+right_vca_log = bess_conf.get('right_vca_queue_name', '/users/prasad67/right-vca.log')
+right_bg_log  = bess_conf.get('right_bg_queue_name',  '/users/prasad67/right-bg.log')
+
+left_vca_burst  = bess_conf.get('left_vca_btl',  bess_conf.get('left_btl',  32))
+left_bg_burst   = bess_conf.get('left_bg_btl',   bess_conf.get('left_btl',  32))
+right_vca_burst = bess_conf.get('right_vca_btl', bess_conf.get('right_btl', 32))
+right_bg_burst  = bess_conf.get('right_bg_btl',  bess_conf.get('right_btl', 32))
+
+sched_policy = bess_conf.get('sched_policy', 'weighted_fair')
+vca_share    = bess_conf.get('vca_share',    80)
+bg_share     = bess_conf.get('bg_share',     20)
+vca_priority = bess_conf.get('vca_priority', 0)
+bg_priority  = bess_conf.get('bg_priority',  1)
+
+vca_src_ips    = list(bess_conf.get('vca_src_ips',    []))
+vca_proto_ports = list(bess_conf.get('vca_proto_ports', []))
+
+# ── Workers ────────────────────────────────────────────────────────────────────
+# FIX 1: Explicitly create workers so all TCs under the same root share a worker.
+WORKER_LEFT  = 0
+WORKER_RIGHT = 1
+bess.add_worker(wid=WORKER_LEFT,  core=0)
+bess.add_worker(wid=WORKER_RIGHT, core=1)
+
+# ── Ports ──────────────────────────────────────────────────────────────────────
+left_nic::PMDPort(pci=left_nic_pci)
+right_nic::PMDPort(pci=right_nic_pci)
+
+left_in::PortInc(port=left_nic)
+left_out::PortOut(port=left_nic)
+right_in::PortInc(port=right_nic)
+right_out::PortOut(port=right_nic)
+
+# ── Matching / classification modules ─────────────────────────────────────────
+em_left::ExactMatch(fields=[{'offset': 0, 'num_bytes': 6}])
+em_left.add(fields=[{'value_bin': bytes(bytearray.fromhex(left_nic_mac))}], gate=0)
+
+em_right::ExactMatch(fields=[{'offset': 0, 'num_bytes': 6}])
+em_right.add(fields=[{'value_bin': bytes(bytearray.fromhex(right_nic_mac))}], gate=0)
+
+ip_match::IPLookup()
+
+split_left::BPF(filters=[])
+split_right::BPF(filters=[])
+
+merger_left_vca::Merge()
+merger_left_bg::Merge()
+merger_right_vca::Merge()
+merger_right_bg::Merge()
+
+# ── Traffic class trees ────────────────────────────────────────────────────────
+# FIX 2: Create TCs (pinned to specific workers) BEFORE creating Queues.
+bess.add_tc('left_root',  policy='rate_limit', resource='bit',
+            limit={'bit': int(speed_mbps * 1024 * 1024)}, wid=WORKER_LEFT)
+bess.add_tc('right_root', policy='rate_limit', resource='bit',
+            limit={'bit': int(speed_mbps * 1024 * 1024)}, wid=WORKER_RIGHT)
+
+# ── Queues ─────────────────────────────────────────────────────────────────────
+with open(CMD_FILE, 'w') as f:
+    f.write(left_vca_log)
+left_vca_q::Queue(size=q_size_packets, backpressure=False)
+left_vca_q.set_burst(burst=left_vca_burst)
+
+if sched_policy == 'weighted_fair':
+    left_vca_q.attach_task(share=vca_share, wid=WORKER_LEFT)
+else:
+    left_vca_q.attach_task(priority=vca_priority, wid=WORKER_LEFT)
+
+with open(CMD_FILE, 'w') as f:
+    f.write(left_bg_log)
+left_bg_q::Queue(size=q_size_packets, backpressure=False)
+left_bg_q.set_burst(burst=left_bg_burst)
+
+if sched_policy == 'weighted_fair':
+    left_bg_q.attach_task(share=bg_share, wid=WORKER_LEFT)
+else:
+    left_bg_q.attach_task(priority=bg_priority, wid=WORKER_LEFT)
+
+with open(CMD_FILE, 'w') as f:
+    f.write(right_vca_log)
+right_vca_q::Queue(size=q_size_packets, backpressure=False)
+right_vca_q.set_burst(burst=right_vca_burst)
+
+if sched_policy == 'weighted_fair':
+    right_vca_q.attach_task(share=vca_share, wid=WORKER_RIGHT)
+else:
+    right_vca_q.attach_task(priority=vca_priority, wid=WORKER_RIGHT)
+
+with open(CMD_FILE, 'w') as f:
+    f.write(right_bg_log)
+right_bg_q::Queue(size=q_size_packets, backpressure=False)
+right_bg_q.set_burst(burst=right_bg_burst)
+
+if sched_policy == 'weighted_fair':
+    right_bg_q.attach_task(share=bg_share, wid=WORKER_RIGHT)
+else:
+    right_bg_q.attach_task(priority=bg_priority, wid=WORKER_RIGHT)
+
+# ── IP routing ─────────────────────────────────────────────────────────────────
+for i, ip_mac_pair in enumerate(right_clients):
+    for prefix, prefix_len in ip_mac_pair[0]:
+        ip_match.add(prefix=prefix, prefix_len=prefix_len, gate=i)
+
+    ip_match:i -> Update(fields=[
+        {'offset': 0, 'size': 6, 'value': int(ip_mac_pair[1], 16)},
+        {'offset': 6, 'size': 6, 'value': int(right_nic_mac, 16)}
+    ]) -> split_right
+
+# FIX 3+4: Unpack prefix_len properly; move catch-all routes outside the loop.
+for i, ip_mac_pair in enumerate(left_clients):
+    gate = i + len(right_clients)
+
+    for prefix, prefix_len in ip_mac_pair[0]:   # was: for prefix in ip_mac_pair[0]
+        ip_match.add(prefix=prefix, prefix_len=prefix_len, gate=gate)
+
+    ip_match:gate -> Update(fields=[
+        {'offset': 0, 'size': 6, 'value': int(ip_mac_pair[1], 16)},
+        {'offset': 6, 'size': 6, 'value': int(left_nic_mac, 16)}
+    ]) -> split_left
+
+# Default catch-all: send unmatched traffic to first left-client gate (outside loop)
+default_gate = len(right_clients)
+ip_match.add(prefix='0.0.0.0',   prefix_len=1, gate=default_gate)
+ip_match.add(prefix='128.0.0.0', prefix_len=1, gate=default_gate)
+
+# ── BPF classification rules ───────────────────────────────────────────────────
+rule_prio = 1000
+
+for ip in vca_src_ips:
+    split_left.add(filters=[{'priority': rule_prio, 'filter': 'src host %s' % ip, 'gate': 0}])
+    split_right.add(filters=[{'priority': rule_prio, 'filter': 'dst host %s' % ip, 'gate': 0}])
+    rule_prio -= 1
+
+for proto, port in vca_proto_ports:
+    split_left.add(filters=[{'priority': rule_prio, 'filter': '%s dst port %d' % (proto, port), 'gate': 0}])
+    split_right.add(filters=[{'priority': rule_prio, 'filter': '%s dst port %d' % (proto, port), 'gate': 0}])
+    rule_prio -= 1
+
+split_left.add(filters=[{'priority': 1, 'filter': 'ip', 'gate': 1}])
+split_right.add(filters=[{'priority': 1, 'filter': 'ip', 'gate': 1}])
+
+# ── Pipeline wiring ────────────────────────────────────────────────────────────
+left_in  -> em_left
+em_left:0  -> ip_match
+
+right_in -> em_right
+em_right:0 -> ip_match
+
+split_left:0  -> merger_left_vca  -> left_vca_q  -> left_out
+split_left:1  -> merger_left_bg   -> left_bg_q   -> left_out
+
+split_right:0 -> merger_right_vca -> right_vca_q -> right_out
+split_right:1 -> merger_right_bg  -> right_bg_q  -> right_out
+
+bess.resume_all()
+
+# ── Bandwidth schedule ─────────────────────────────────────────────────────────
+open(BW_LOG, 'w').close()
+
+for bw_mbps, duration in bw_config:
+    bit_rate = int(bw_mbps * 1024 * 1024)
+    with open(BW_LOG, 'a') as f:
+        f.write(str(time.time()) + ' ' + str(bit_rate) + '\n')
+    bess.update_tc_params('left_root',  resource='bit', limit={'bit': bit_rate})
+    bess.update_tc_params('right_root', resource='bit', limit={'bit': bit_rate})
+    time.sleep(duration)

@@ -2,7 +2,7 @@ import json
 import os
 import time
 
-with open('/home/prasad67/vca_cca/bess_config', 'r') as f:
+with open('/users/prasad67/bess_config', 'r') as f:
     bess_conf = eval(f.read().strip())
 
 left_clients = bess_conf['left_clients'] # a list of tuples of (ip, mac) pairs
@@ -28,7 +28,7 @@ right_log = bess_conf['right_queue_name']
 
 latency = bess_conf['rtt']
 
-cmd_file = '/home/prasad67/vca_cca/filename.cmd'
+cmd_file = '/users/prasad67/filename.cmd'
 with open(cmd_file, 'w') as file:
       file.write(left_log)
       file.close()
@@ -72,7 +72,10 @@ for i, ip_mac_pair in enumerate(right_clients):
 
 for i, ip_mac_pair in enumerate(left_clients):
       ip_match.add(prefix=ip_mac_pair[0][0], prefix_len=32, gate=i + len(right_clients))
-      #ip_match.add(prefix=ip_mac_pair[0][1], prefix_len=32, gate=i + len(right_clients))
+      ip_match.add(prefix=ip_mac_pair[0][1], prefix_len=32, gate=i + len(right_clients))
+      ip_match.add(prefix=ip_mac_pair[0][2], prefix_len=32, gate=i + len(right_clients))
+      ip_match.add(prefix="0.0.0.0", prefix_len=1, gate=i + len(right_clients))
+      ip_match.add(prefix="128.0.0.0", prefix_len=1, gate=i + len(right_clients))
       ip_match:(i + len(right_clients)) -> Update(fields=[{'offset': 0, 'size': 6, 'value': int(ip_mac_pair[1], 16)},
                                     {'offset': 6, 'size': 6, 'value': int(left_nic_mac, 16)}]) -> merger_left
 
@@ -88,11 +91,11 @@ merger_right -> btl_queue_right -> right_out
 
 bess.resume_all()
 
-open("/home/prasad67/bandwidth.log", "w").close()
+open("/users/prasad67/bandwidth.log", "w").close()
 
 bw_config = bess_conf['bw_config']
 for bw_mbps, duration in bw_config:
-	with open("/home/prasad67/bandwidth.log", "a") as file:
+	with open("/users/prasad67/bandwidth.log", "a") as file:
 	    file.write(str(time.time()) + " " + str(int(bw_mbps*1024*1024)) + "\n")
 	#print("setting stuff " + str(bw_mbps) + " " + str(duration))
 	bess.update_tc_params('bit_limit', resource='bit', limit={'bit':int(bw_mbps*1024*1024)})	

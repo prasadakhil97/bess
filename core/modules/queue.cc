@@ -140,13 +140,13 @@ CommandResponse Queue::Init(const bess::pb::QueueArg &arg) {
   init_arg_ = arg;
 
   // ADDED BY CHERIAN -- START
-  std::ifstream infile("/home/prasad67/vca_cca/filename.cmd");
+  std::ifstream infile("/users/prasad67/filename.cmd");
   std::string line;
   if (std::getline(infile, line)) {
     std::string filename = line;
     test_file = fopen(filename.c_str(), "wb");
   } else {
-    test_file = fopen("/home/prasad67/vca_cca/test-file.log", "wb");
+    test_file = fopen("/users/prasad67/test-file.log", "wb");
   }
   // std::string filename = "/users/prasad67/test-file-" + std::to_string(init_time_micro) + ".log";
   
